@@ -10,3 +10,15 @@ reader:
 	g++ -std=c++11 -pedantic -O0 -g perf_event_reader.cpp -c -o perf_event_reader.o
 	g++ -std=c++11 -pedantic -O0 -g pt_parser.cpp -c -o pt_parser.o $(LIBIPT_INCLUDE) $(LIBXED_INCLUDE)
 	g++ -o parser perf_event_reader.o pt_parser.o $(LIBXED_LIBRARY)
+
+JNI_INCLUDE=-I/usr/lib/jvm/java-8-openjdk/include/ -I/usr/lib/jvm/java-8-openjdk/include/linux/
+
+jhandler:
+	g++ jhandler.cpp -std=c++11 -pedantic -O0 -c -o jhandler.o -fpic $(JNI_INCLUDE)
+	g++ -o libjhandler.so jhandler.o -shared
+
+java-app:
+	javac JTest.java
+	-LD_LIBRARY_PATH=. java -agentlib:jhandler -cp . JTest
+#-java  -cp . JTest
+
