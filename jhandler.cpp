@@ -3,6 +3,15 @@
 #include <jvmticmlr.h>
 
 #include <iostream>
+#include <vector>
+#include <unorderred_map>
+#include <map>
+
+#include "hw_bp.hpp"
+
+struct method_to_profile {
+    void* addr;
+};
 
 static void JNICALL
 cbMethodCompiled(

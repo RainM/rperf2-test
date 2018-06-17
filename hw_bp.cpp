@@ -29,17 +29,16 @@ enum {
 #define ENABLE_BREAK_WRITE(x) (BREAK_WRITE<<(16+(x*4)))
 #define ENABLE_BREAK_READWRITE(x) (BREAK_READWRITE<<(16+(x*4)))
 
+bool enable_ptrace_for_all() {
+    auto status = ::prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0,0,0);
+    return !status;
+}
+
 bool install_hw_bp_on_exec(void* exec_bp_addr, int bpno, void (*handler)(int)) {
     pid_t child_pid = 0;
     pid_t parent_pid = ::getpid();
     uint32_t exec_pt_mask = ENABLE_BREAK_EXEC(bpno);
 
-    {
-	auto status = ::prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0,0,0);
-	if (status) {
-	    ::perror("Can't set PRCTL");
-	}
-    }
     
     if ((child_pid = ::fork()) != 0) {
 	int child_status = 0;
@@ -82,19 +81,4 @@ bool install_hw_bp_on_exec(void* exec_bp_addr, int bpno, void (*handler)(int)) {
 
 	::exit(0);
     }
-}
-
-int foo() {
-    return 42;
-}
-
-void exec_handler(int) {
-    std::cout << "exec handler" << std::endl;
-}
-
-int main() {
-
-    install_hw_bp_on_exec((void*)&foo, 0, exec_handler);
-    
-    return foo();
 }

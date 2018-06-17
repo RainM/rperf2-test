@@ -17,11 +17,22 @@ jhandler:
 	g++ jhandler.cpp -std=c++11 -Wall -pedantic -O0 -c -o jhandler.o -fpic $(JNI_INCLUDE)
 	g++ -o libjhandler.so jhandler.o -shared
 
-java-app:
+java-app-agent:
 	javac JTest.java
 	-LD_LIBRARY_PATH=. java -agentlib:jhandler -cp . JTest
-#-java  -cp . JTest
 
-hwbp:
+java-app:
+	-java  -cp . JTest
+
+hwbp-example:
 	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic
-	g++ -o hw_bp hw_bp.o
+	g++ hw_bp_sample.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp_sample.o -fpic
+	g++ -o hw_bp hw_bp.o hw_bp_sample.o
+
+xed-example:
+	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic
+	g++ xed_sample.cpp -std=c++11 -pedantic -O0 -g -c -o xed_sample.o -fpic
+	g++ -o xed_sample xed_driver.o xed_sample.o -lpthread
+
+sigill_example:
+	g++ sigill_overwrite.cpp -fpic -std=c++11 -pedantic -O0 -g -o sigill_sample
