@@ -2,9 +2,10 @@ all: reader parser
 
 
 LIBIPT_INCLUDE=-I/home/ruamnsa/dev/ipt/processor-trace/libipt/internal/include/ -I/home/ruamnsa/dev/ipt/processor-trace/build/libipt/include/ 
-LIBXED_INCLUDE=-I/home/ruamnsa/dev/ipt/xed/obj/
+LIBXED_INCLUDE=-I/home/ruamnsa/dev/ipt/xed/obj/ -I/home/sergey/dev/xed/include/public/ -I/home/sergey/dev/xed/obj/ -I/home/sergey/dev/xed/include/public/xed/
 
-LIBXED_LIBRARY=-L/home/ruamnsa/dev/ipt/xed/obj/ -lxed -L/home/ruamnsa/dev/ipt/processor-trace/build/lib/ -lipt
+LIBXED_LIBRARY=-L/home/sergey/dev/xed/obj/ -lxed
+LIBIPT_LIBRARY=-L/home/ruamnsa/dev/ipt/xed/obj/ -lxed -L/home/ruamnsa/dev/ipt/processor-trace/build/lib/ -lipt
 
 reader:
 	g++ -std=c++11 -pedantic -O0 -g perf_event_reader.cpp -c -o perf_event_reader.o
@@ -30,9 +31,10 @@ hwbp-example:
 	g++ -o hw_bp hw_bp.o hw_bp_sample.o
 
 xed-example:
-	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic
-	g++ xed_sample.cpp -std=c++11 -pedantic -O0 -g -c -o xed_sample.o -fpic
-	g++ -o xed_sample xed_driver.o xed_sample.o -lpthread
+	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic
+	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic $(LIBXED_INCLUDE)
+	g++ xed_sample.cpp -std=c++11 -pedantic -O2 -g -c -o xed_sample.o -fpic
+	g++ -o xed_sample hw_bp.o xed_driver.o xed_sample.o -lpthread $(LIBXED_LIBRARY)
 
 sigill_example:
 	g++ sigill_overwrite.cpp -fpic -std=c++11 -pedantic -O0 -g -o sigill_sample
