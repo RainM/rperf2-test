@@ -14,7 +14,7 @@ reader:
 JNI_INCLUDE=-I/usr/lib/jvm/java-8-openjdk/include/ -I/usr/lib/jvm/java-8-openjdk/include/linux/
 
 jhandler:
-	g++ jhandler.cpp -std=c++11 -pedantic -O0 -c -o jhandler.o -fpic $(JNI_INCLUDE)
+	g++ jhandler.cpp -std=c++11 -Wall -pedantic -O0 -c -o jhandler.o -fpic $(JNI_INCLUDE)
 	g++ -o libjhandler.so jhandler.o -shared
 
 java-app:
@@ -22,3 +22,6 @@ java-app:
 	-LD_LIBRARY_PATH=. java -agentlib:jhandler -cp . JTest
 #-java  -cp . JTest
 
+hwbp:
+	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic
+	g++ -o hw_bp hw_bp.o
