@@ -1,6 +1,7 @@
 #include <iostream>
 #include <math.h>
 #include <unordered_map>
+#include <string.h>
 
 #include <signal.h>
 #include <sys/mman.h>
@@ -38,33 +39,46 @@ void method_start(int) {
     std::cout << "Method start!" << std::endl;
 }
 
-std::unordered_map<uintptr_t, unsigned char> original_code_for_location;
+__attribute__((naked)) void plain_ret()  {
+    asm("ret");
+}
+
+std::unordered_map<uintptr_t, void*> original_code_for_location;
 
 void handler(int signal, siginfo_t* si, void* arg) {
 
     unsigned char* instruction_ptr = (unsigned char*)si->si_addr;
 
-    unsigned char original_instruction = original_code_for_location[(uintptr_t)instruction_ptr];
+    auto handler = original_code_for_location[(uintptr_t)instruction_ptr];
     
-    printf("instruction: %x -> %x\n", *instruction_ptr, original_instruction);
-
-    *instruction_ptr = original_instruction;
-
+    printf("instruction: %x -> %x\n", *instruction_ptr, handler);
     
     printf("SEGILL at %p!\n", si->si_addr);
     ucontext_t* ctx = reinterpret_cast<ucontext_t*>(arg);
-    ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)instruction_ptr;
+    ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)handler;
 }
 
 
 int main() {
-    auto rets = get_all_rets((void*)&foo, 0x61);
+    auto rets = get_all_rets((void*)&foo, 0xe8);
 
     enable_read_write_for_routine(rets);
+
+    void* handlers = ::mmap(
+	nullptr,
+	4096,
+	PROT_WRITE | PROT_EXEC,
+	MAP_PRIVATE | MAP_ANONYMOUS,
+	0,
+	0);
+
+    void* it = handlers;
     
     for (const auto& ret : rets) {
 	std::cout << ret << std::endl;
-	original_code_for_location[(uintptr_t)ret.addr] = *(unsigned char*)ret.addr;
+	::memcpy(it, ret.addr, ret.size);
+	original_code_for_location[(uintptr_t)ret.addr] = it;
+	it += ret.size;
 	*(unsigned char*)ret.addr = 6;
     }
 
@@ -79,6 +93,8 @@ int main() {
     ::install_hw_bp_on_exec((void*)foo, 0, method_start);
 
     std::cout << "foo: " << foo(1) << std::endl;
+
+    std::cout << "Somewhere in the end" << std::endl;
     
     return 44;
 }

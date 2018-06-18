@@ -33,7 +33,7 @@ hwbp-example:
 xed-example:
 	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic
 	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic $(LIBXED_INCLUDE)
-	g++ xed_sample.cpp -std=c++11 -pedantic -O2 -g -c -o xed_sample.o -fpic
+	g++ xed_sample.cpp -std=c++11 -pedantic -O0 -g -c -o xed_sample.o -fpic
 	g++ -o xed_sample hw_bp.o xed_driver.o xed_sample.o -lpthread $(LIBXED_LIBRARY)
 
 sigill_example:
