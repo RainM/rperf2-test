@@ -45,6 +45,7 @@ __attribute__((naked)) void plain_ret()  {
 
 std::unordered_map<uintptr_t, void*> original_code_for_location;
 
+
 void handler(int signal, siginfo_t* si, void* arg) {
 
     unsigned char* instruction_ptr = (unsigned char*)si->si_addr;
@@ -89,8 +90,8 @@ int main() {
     sa.sa_flags = SA_SIGINFO;
     sigaction(SIGILL, &sa, NULL);
     
-    ::enable_ptrace_for_all();
-    ::install_hw_bp_on_exec((void*)foo, 0, method_start);
+    //::enable_ptrace_for_all();
+    //::install_hw_bp_on_exec((void*)foo, 0, method_start);
 
     std::cout << "foo: " << foo(1) << std::endl;
 

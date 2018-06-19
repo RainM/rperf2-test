@@ -19,6 +19,6 @@ class JTest {
 	    }
 	}
 	System.out.println("s = " + s);
-	System.exit(result);
+	System.out.println("result = " + result);
     }
 }

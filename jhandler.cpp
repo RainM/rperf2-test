@@ -2,16 +2,61 @@
 #include <jvmti.h>
 #include <jvmticmlr.h>
 
+#include <string.h>
+#include <signal.h>
+#include <sys/mman.h>
+#include <stdint.h>
+
 #include <iostream>
 #include <vector>
-#include <unorderred_map>
+#include <unordered_map>
+#include <unordered_set>
 #include <map>
 
+extern "C" {
+#include "xed/xed-interface.h"
+}
+
 #include "hw_bp.hpp"
+#include "xed_driver.hpp"
+
 
 struct method_to_profile {
     void* addr;
 };
+
+std::unordered_map<const void*, void*> handler_by_addr;
+std::unordered_set<const void*> routine_begin;
+std::unordered_set<const void*> routine_end;
+
+void handler(int signal, siginfo_t* si, void* arg) {
+
+    const void* sigill_addr = (unsigned char*)si->si_addr;
+    const void* sigill_handler = handler_by_addr[sigill_addr];
+
+    auto it_route_begin = routine_begin.find(sigill_addr);
+    if (it_route_begin != routine_begin.end()) {
+	printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+    } else {
+        auto it_route_end = routine_end.find(sigill_addr);
+	if (it_route_end != routine_end.end()) {
+	    printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	} else {
+	    printf("UNKNOWN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	}
+    }
+
+    if (sigill_handler == nullptr) {
+	printf("???\n");
+	::exit(1);
+    }
+    
+//    printf("SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+
+    ucontext_t* ctx = reinterpret_cast<ucontext_t*>(arg);
+    ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)sigill_handler;
+}
+
 
 static void JNICALL
 cbMethodCompiled(
@@ -45,6 +90,65 @@ cbMethodCompiled(
 
 		std::cout << "Method: " << full_method_name << std::endl;
 
+		if (method_name == std::string("foo") /* && sig == "(II)I" */ ) {
+		    std::cout << "METHOD!!!" << std::endl;
+		    auto rets = get_all_rets(code_addr, code_size+1);
+
+		    void* handlers = ::mmap(
+			nullptr,
+			4096,
+			PROT_WRITE | PROT_EXEC,
+			MAP_PRIVATE | MAP_ANONYMOUS,
+			0,
+			0);
+
+		    void* it = handlers;
+
+		    for (const auto& ret : rets) {
+			std::cout << ret << std::endl;
+			::memcpy(it, ret.addr, ret.size);
+			handler_by_addr[ret.addr] = it;
+			it += ret.size;
+			//*(unsigned char*)ret.addr = 0x06; // incorrect encoding
+
+			std::cout << "RET Handler: " << std::hex << ret.addr << " -> " << std::hex << it << std::endl;
+			routine_end.insert(ret.addr);
+		    }
+		    
+		    unsigned char first_inst_len = 0;
+		    auto first_instruction = disassemble(code_addr, &first_inst_len);
+		    std::cout << "first instruction: " << first_instruction << std::endl;
+		    
+		    //auto routine_begin_handler_ptr = it;
+		    handler_by_addr[code_addr] = it;
+		    std::cout << "Handler: " << std::hex << code_addr << " -> " << std::hex << it << std::endl;
+		    routine_begin.insert(code_addr);
+		    ::memcpy(it, code_addr, first_inst_len);
+		    it += first_inst_len;
+		    
+		    uintptr_t jmp_target_diff = ((uintptr_t)code_addr + 2) - (uintptr_t)it;
+
+		    auto inst_begin = it;
+		    *(unsigned char*)it++ = 0xe9; // jmp
+		    *(uint32_t*)it = jmp_target_diff;
+		    
+		    //std::cout << "Instr for " << bytes << " bytes" << std::endl;
+		    auto disasm = disassemble(inst_begin, 5);
+		    std::cout << "Jump bask: " << std::hex << (uintptr_t)inst_begin << "\t -> " << disasm << std::endl;
+
+		    disassemble(std::cout, inst_begin - first_inst_len, first_inst_len + 5);
+		    std::cout << std::endl;
+		    
+		    //*(unsigned char*)code_addr = 0x06;
+		    ::memset((void*)code_addr, 0x06, first_inst_len);
+		    //*((unsigned char*)code_addr + first_inst_len) = 0x06;
+		    
+		    std::cout << "SET SIGILL at the beginning" << std::endl;
+		    
+		} else {
+		    std::cout << "method = " << method_name << std::endl;
+		}
+		
 		{
 		    const jvmtiCompiledMethodLoadRecordHeader* comp_info = reinterpret_cast<const jvmtiCompiledMethodLoadRecordHeader*>(compile_info);
 
@@ -58,7 +162,7 @@ cbMethodCompiled(
 			    
 			    for (int i = 0; i < info->numstackframes; ++i) {
 				jmethodID inline_method = info->methods[i];
-				std::cout << "methodID: " << method << std::endl;
+				//std::cout << "methodID: " << method << std::endl;
 
 				char* inline_method_name = nullptr;
 				char* inline_method_sign = nullptr;
@@ -73,7 +177,7 @@ cbMethodCompiled(
 				jvmtiLineNumberEntry* lines = nullptr;
 				jvmti->GetLineNumberTable(inline_method, &inline_entry_cnt, &lines);
 
-				std::cout << inline_class_sign << "->" << inline_method_name << inline_method_sign << std::endl;
+				//std::cout << inline_class_sign << "->" << inline_method_name << inline_method_sign << std::endl;
 
 				/*
 				std::cout << "Lines: ";
@@ -126,6 +230,14 @@ Agent_OnLoad(JavaVM *vm, char *options, void *reserved) {
 
     std::cout << "Hello world from JVMTI" << std::endl;
 
+    struct sigaction sa = {};
+    
+    ::sigemptyset(&sa.sa_mask);
+    sa.sa_sigaction = &handler;
+    sa.sa_flags = SA_SIGINFO;
+    sigaction(SIGILL, &sa, NULL);
+
+    
     jvmtiEnv* jvmti = nullptr;
     {
 	auto status = vm->GetEnv(reinterpret_cast<void**>(&jvmti), JVMTI_VERSION_1);
