@@ -15,16 +15,20 @@ reader:
 JNI_INCLUDE=-I/usr/lib/jvm/java-8-openjdk/include/ -I/usr/lib/jvm/java-8-openjdk/include/linux/
 
 jhandler:
-	g++ jhandler.cpp -std=c++11 -Wall -pedantic -O0 -c -o jhandler.o -fpic $(JNI_INCLUDE) $(LIBXED_INCLUDE)
+	g++ jhandler.cpp -std=c++11 -Wall -pedantic -O2 -c -o jhandler.o -fpic $(JNI_INCLUDE) $(LIBXED_INCLUDE)
 	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic $(LIBXED_INCLUDE)
 	g++ -o libjhandler.so jhandler.o xed_driver.o $(LIBXED_LIBRARY) -shared 
 
 java-app-agent:
 	javac JTest.java
-	-LD_LIBRARY_PATH=.:/home/sergey/dev/xed/obj/  java -agentlib:jhandler -XX:+UnlockDiagnosticVMOptions -XX:-PrintAssembly -cp . JTest
+	-LD_LIBRARY_PATH=.:/home/sergey/dev/xed/obj/  java -agentlib:jhandler \
+		-XX:+UnlockDiagnosticVMOptions \
+		-XX:-PrintAssembly \
+		-XX:CompileCommand="dontinline JTest::foo" \
+		-cp . JTest
 
 java-app:
-	-java  -cp . JTest
+	-java  -XX:CompileCommand="dontinline JTest::foo" -cp . JTest
 
 hwbp-example:
 	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic

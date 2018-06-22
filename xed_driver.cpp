@@ -11,7 +11,7 @@ xed_address_width_enum_t addr_mode = XED_ADDRESS_WIDTH_64b;
 
 
 std::ostream& disassemble(std::ostream& stm, const void* addr, size_t len) {
-    auto it = (const char*)addr, it_end = (const char*)addr + len + 1;
+    auto it = (const char*)addr, it_end = (const char*)addr + len;
     while (it < it_end) {
 	unsigned char ret_len = 0;
 	stm << disassemble(it, &ret_len) << std::endl;

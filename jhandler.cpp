@@ -8,6 +8,8 @@
 #include <stdint.h>
 
 #include <iostream>
+#include <mutex>
+#include <atomic>
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
@@ -29,29 +31,46 @@ std::unordered_map<const void*, void*> handler_by_addr;
 std::unordered_set<const void*> routine_begin;
 std::unordered_set<const void*> routine_end;
 
+std::atomic<bool> atomic_guard;
+
+struct spin_cs {
+    spin_cs(std::atomic<bool>& lock): _lock(lock) {
+	while (_lock.exchange(true) == true) {}
+    }
+    ~spin_cs() {
+	_lock.store(false);
+    }
+    spin_cs(const spin_cs&) = delete;
+    spin_cs& operator = (const spin_cs&) = delete;
+private:
+    std::atomic<bool>& _lock;
+};
+
 void handler(int signal, siginfo_t* si, void* arg) {
 
     const void* sigill_addr = (unsigned char*)si->si_addr;
     const void* sigill_handler = handler_by_addr[sigill_addr];
 
-    auto it_route_begin = routine_begin.find(sigill_addr);
-    if (it_route_begin != routine_begin.end()) {
-	printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
-    } else {
-        auto it_route_end = routine_end.find(sigill_addr);
-	if (it_route_end != routine_end.end()) {
-	    printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+    {
+	spin_cs cs(atomic_guard);
+	
+	auto it_route_begin = routine_begin.find(sigill_addr);
+	if (it_route_begin != routine_begin.end()) {
+	    //printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	} else {
-	    printf("UNKNOWN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	    auto it_route_end = routine_end.find(sigill_addr);
+	    if (it_route_end != routine_end.end()) {
+		//printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	    } else {
+		printf("UNKNOWN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	    }
 	}
     }
-
+    
     if (sigill_handler == nullptr) {
 	printf("???\n");
 	::exit(1);
     }
-    
-//    printf("SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 
     ucontext_t* ctx = reinterpret_cast<ucontext_t*>(arg);
     ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)sigill_handler;
@@ -109,12 +128,17 @@ cbMethodCompiled(
 			::memcpy(it, ret.addr, ret.size);
 			handler_by_addr[ret.addr] = it;
 			it += ret.size;
-			//*(unsigned char*)ret.addr = 0x06; // incorrect encoding
+			*(unsigned char*)ret.addr = 0x06; // incorrect encoding
 
 			std::cout << "RET Handler: " << std::hex << ret.addr << " -> " << std::hex << it << std::endl;
 			routine_end.insert(ret.addr);
 		    }
-		    
+
+		    {
+
+			spin_cs cs(atomic_guard);
+
+			
 		    unsigned char first_inst_len = 0;
 		    auto first_instruction = disassemble(code_addr, &first_inst_len);
 		    std::cout << "first instruction: " << first_instruction << std::endl;
@@ -131,6 +155,7 @@ cbMethodCompiled(
 		    auto inst_begin = it;
 		    *(unsigned char*)it++ = 0xe9; // jmp
 		    *(uint32_t*)it = jmp_target_diff;
+		    it += sizeof(uint32_t);
 		    
 		    //std::cout << "Instr for " << bytes << " bytes" << std::endl;
 		    auto disasm = disassemble(inst_begin, 5);
@@ -138,12 +163,40 @@ cbMethodCompiled(
 
 		    disassemble(std::cout, inst_begin - first_inst_len, first_inst_len + 5);
 		    std::cout << std::endl;
+
+		    unsigned char second_inst_len = 0;
+		    const char* second_inst_ptr = (const char*)code_addr + first_inst_len;
+		    auto second_inst = disassemble(second_inst_ptr, &second_inst_len);
+		    std::cout << "second inst: " << second_inst << std::endl;
+		    
+		    handler_by_addr[second_inst_ptr] = it;
+		    routine_begin.insert(second_inst_ptr);
+		    ::memcpy(it, second_inst_ptr, second_inst_len);
+		    it += second_inst_len;
+
+		    uintptr_t jmp_target_inst2_diff = ((uintptr_t)second_inst_ptr + 1) - ((uintptr_t)it + 5);
+		    std::cout << "!Second instr: " << std::hex << (uintptr_t)second_inst_ptr << "@" << (int)second_inst_len << std::endl;
+		    disassemble(std::cout, second_inst_ptr, second_inst_len) << std::endl;
+
+		    auto second_inst_begin = it;
+		    *(unsigned char*)it++ = 0xE9;
+		    *(uint32_t*)it = jmp_target_inst2_diff;
+		    it += sizeof(uint32_t);
+
+		    std::cout << "jump back: ";
+		    disassemble(std::cout, second_inst_begin, second_inst_len) << std::endl;
 		    
 		    //*(unsigned char*)code_addr = 0x06;
 		    ::memset((void*)code_addr, 0x06, first_inst_len);
+		    //::memset((void*)second_inst_ptr, 0x06, second_inst_len);
 		    //*((unsigned char*)code_addr + first_inst_len) = 0x06;
 		    
 		    std::cout << "SET SIGILL at the beginning" << std::endl;
+
+
+		    }
+		    
+		    //asm volatile ("" : : : "memory");
 		    
 		} else {
 		    std::cout << "method = " << method_name << std::endl;
