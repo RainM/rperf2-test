@@ -10,6 +10,9 @@
 #include <cstdint>
 #include <errno.h>
 #include <iostream>
+#include <cstring>
+
+#include "xed_driver.hpp"
 
 enum {
 	BREAK_EXEC = 0x0,
@@ -81,4 +84,35 @@ bool install_hw_bp_on_exec(void* exec_bp_addr, int bpno, void (*handler)(int)) {
 
 	::exit(0);
     }
+}
+
+unsigned char install_sigill_trampouline(char* inst_addr, char* implementation_loc) {
+    unsigned char inst_len = 0;
+    auto instruction = disassemble(inst_addr, &inst_len);
+
+    std::cout << "Create trampouline:\n";
+    std::cout << std::hex << (uintptr_t)inst_addr << "/" << (int)inst_len << "\t" << instruction << std::endl;
+    
+    ::memcpy(implementation_loc, inst_addr, inst_len);
+
+    unsigned char result = inst_len + 6 + 8; // instruction len + 2 byte as 'jmp' encoding + 4 bytes as jump target reg + 8 as target
+
+    implementation_loc[inst_len + 0] = (unsigned char)0xFF;
+    implementation_loc[inst_len + 1] = (unsigned char)0x25;
+    implementation_loc[inst_len + 2] = (unsigned char)0x00;
+    implementation_loc[inst_len + 3] = (unsigned char)0x00;
+    implementation_loc[inst_len + 4] = (unsigned char)0x00;
+    implementation_loc[inst_len + 5] = (unsigned char)0x00;
+    union {
+	char* c;
+	uint64_t* addr;
+    } u = {implementation_loc + inst_len + 6};
+
+    *u.addr = ((uintptr_t)inst_addr) + inst_len;
+
+    std::cout << "Trampouline: "; disassemble(std::cout, implementation_loc, inst_len + 6) << std::endl;
+
+    *inst_addr = 0x06;
+    
+    return result;
 }

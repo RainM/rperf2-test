@@ -33,19 +33,6 @@ std::unordered_set<const void*> routine_end;
 
 std::atomic<bool> atomic_guard;
 
-struct spin_cs {
-    spin_cs(std::atomic<bool>& lock): _lock(lock) {
-	while (_lock.exchange(true) == true) {}
-    }
-    ~spin_cs() {
-	_lock.store(false);
-    }
-    spin_cs(const spin_cs&) = delete;
-    spin_cs& operator = (const spin_cs&) = delete;
-private:
-    std::atomic<bool>& _lock;
-};
-
 void handler(int signal, siginfo_t* si, void* arg) {
 
     const void* sigill_addr = (unsigned char*)si->si_addr;
@@ -56,11 +43,11 @@ void handler(int signal, siginfo_t* si, void* arg) {
 	
 	auto it_route_begin = routine_begin.find(sigill_addr);
 	if (it_route_begin != routine_begin.end()) {
-	    //printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	    printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	} else {
 	    auto it_route_end = routine_end.find(sigill_addr);
 	    if (it_route_end != routine_end.end()) {
-		//printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+		printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	    } else {
 		printf("UNKNOWN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	    }
@@ -75,7 +62,6 @@ void handler(int signal, siginfo_t* si, void* arg) {
     ucontext_t* ctx = reinterpret_cast<ucontext_t*>(arg);
     ctx->uc_mcontext.gregs[REG_RIP] = (greg_t)sigill_handler;
 }
-
 
 static void JNICALL
 cbMethodCompiled(
@@ -121,23 +107,41 @@ cbMethodCompiled(
 			0,
 			0);
 
-		    void* it = handlers;
+		    char* it = (char*)handlers;
 
-		    for (const auto& ret : rets) {
-			std::cout << ret << std::endl;
-			::memcpy(it, ret.addr, ret.size);
-			handler_by_addr[ret.addr] = it;
-			it += ret.size;
-			*(unsigned char*)ret.addr = 0x06; // incorrect encoding
-
-			std::cout << "RET Handler: " << std::hex << ret.addr << " -> " << std::hex << it << std::endl;
-			routine_end.insert(ret.addr);
-		    }
 
 		    {
 
 			spin_cs cs(atomic_guard);
 
+
+			for (const auto& ret : rets) {
+			    std::cout << ret << std::endl;
+
+			    auto tr_sz = install_sigill_trampouline(ret.addr, it);
+			    routine_end.insert(ret.addr);
+			    handler_by_addr[ret.addr] = it;
+			    it += tr_sz;
+
+
+			    
+			    /*::memcpy(it, ret.addr, ret.size);
+			      handler_by_addr[ret.addr] = it;
+			      it += ret.size;
+			      *(unsigned char*)ret.addr = 0x06; // incorrect encoding
+
+			      std::cout << "RET Handler: " << std::hex << ret.addr << " -> " << std::hex << it << std::endl;
+			    */
+			    routine_end.insert(ret.addr);
+			}			
+
+			auto tr_sz = install_sigill_trampouline((char*)code_addr, it);
+			routine_begin.insert((char*)code_addr);
+			handler_by_addr[code_addr] = it;
+			it += tr_sz;
+			
+
+			/*
 			
 		    unsigned char first_inst_len = 0;
 		    auto first_instruction = disassemble(code_addr, &first_inst_len);
@@ -193,7 +197,8 @@ cbMethodCompiled(
 		    
 		    std::cout << "SET SIGILL at the beginning" << std::endl;
 
-
+			*/
+			
 		    }
 		    
 		    //asm volatile ("" : : : "memory");

@@ -17,7 +17,8 @@ JNI_INCLUDE=-I/usr/lib/jvm/java-8-openjdk/include/ -I/usr/lib/jvm/java-8-openjdk
 jhandler:
 	g++ jhandler.cpp -std=c++11 -Wall -pedantic -O2 -c -o jhandler.o -fpic $(JNI_INCLUDE) $(LIBXED_INCLUDE)
 	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic $(LIBXED_INCLUDE)
-	g++ -o libjhandler.so jhandler.o xed_driver.o $(LIBXED_LIBRARY) -shared 
+	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic
+	g++ -o libjhandler.so jhandler.o hw_bp.o xed_driver.o $(LIBXED_LIBRARY) -shared 
 
 java-app-agent:
 	javac JTest.java
@@ -39,7 +40,9 @@ xed-example:
 	g++ hw_bp.cpp -std=c++11 -pedantic -Wall -O0 -g -c -o hw_bp.o -fpic
 	g++ xed_driver.cpp -std=c++11 -pedantic -O0 -g -c -o xed_driver.o -fpic $(LIBXED_INCLUDE)
 	g++ xed_sample.cpp -std=c++11 -pedantic -O0 -g -c -o xed_sample.o -fpic
+	g++ xed_sample2.cpp -std=c++11 -pedantic -O0 -g -c -o xed_sample2.o -fpic
 	g++ -o xed_sample hw_bp.o xed_driver.o xed_sample.o -lpthread $(LIBXED_LIBRARY)
+	g++ -o xed_sample2 hw_bp.o xed_driver.o xed_sample2.o -lpthread $(LIBXED_LIBRARY)
 
 sigill_example:
 	g++ sigill_overwrite.cpp -fpic -std=c++11 -pedantic -O0 -g -o sigill_sample
