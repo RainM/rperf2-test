@@ -13,7 +13,7 @@ class JTest {
     
     public static void main(String[] args) {
 	int result = args.length;
-	for (int i = 0; i < 100000; ++i) {
+	for (int i = 0; i < 10000; ++i) {
 	    for (int ii = 0; ii < 1000; ++ii) {
 		result = foo(result + 1, ii % args.hashCode());
 	    }

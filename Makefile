@@ -22,7 +22,7 @@ jhandler:
 
 java-app-agent:
 	javac JTest.java
-	-LD_LIBRARY_PATH=.:/home/sergey/dev/xed/obj/  java -agentlib:jhandler \
+	-LD_LIBRARY_PATH=.:/home/sergey/dev/xed/obj/  java '-agentlib:jhandler=LJTest;::foo' \
 		-XX:+UnlockDiagnosticVMOptions \
 		-XX:-PrintAssembly \
 		-XX:CompileCommand="dontinline JTest::foo" \

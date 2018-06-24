@@ -42,10 +42,10 @@ bool install_hw_bp_on_exec(void* exec_bp_addr, int bpno, void (*handler)(int)) {
     pid_t parent_pid = ::getpid();
     uint32_t exec_pt_mask = ENABLE_BREAK_EXEC(bpno);
 
-    
+
     if ((child_pid = ::fork()) != 0) {
 	int child_status = 0;
-	
+
 	::waitpid(child_pid, &child_status, 0);
 	::signal(SIGTRAP, handler);
 
@@ -92,7 +92,7 @@ unsigned char install_sigill_trampouline(char* inst_addr, char* implementation_l
 
     std::cout << "Create trampouline:\n";
     std::cout << std::hex << (uintptr_t)inst_addr << "/" << (int)inst_len << "\t" << instruction << std::endl;
-    
+
     ::memcpy(implementation_loc, inst_addr, inst_len);
 
     unsigned char result = inst_len + 6 + 8; // instruction len + 2 byte as 'jmp' encoding + 4 bytes as jump target reg + 8 as target
@@ -113,6 +113,6 @@ unsigned char install_sigill_trampouline(char* inst_addr, char* implementation_l
     std::cout << "Trampouline: "; disassemble(std::cout, implementation_loc, inst_len + 6) << std::endl;
 
     *inst_addr = 0x06;
-    
+
     return result;
 }

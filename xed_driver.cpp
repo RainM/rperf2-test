@@ -26,7 +26,7 @@ std::string disassemble(const void* addr, unsigned char len) {
     xed_decoded_inst_t xinstr;
     xed_decoded_inst_zero(&xinstr);
     xed_decoded_inst_set_mode(&xinstr, machine_mode, addr_mode);
-    
+
     xed_error = xed_decode(
 	&xinstr,
 	XED_STATIC_CAST(const xed_uint8_t*, addr),
@@ -36,13 +36,13 @@ std::string disassemble(const void* addr, unsigned char len) {
 
     xed_print_info_t pi = {};
     xed_init_print_info(&pi);
-    
+
     pi.p = &xinstr;
     pi.blen = sizeof(buffer);
     pi.buf = buffer;
     pi.runtime_address = (uint64_t)addr;
     pi.syntax = XED_SYNTAX_ATT;
-    
+
     int ok = xed_format_generic(&pi);
     if (!ok) {
 	std::cerr << "can't disassemble" << std::endl;
@@ -57,25 +57,25 @@ std::string disassemble(const void* addr, unsigned char* ret_len) {
 	xed_decoded_inst_t xinstr;
 	xed_decoded_inst_zero(&xinstr);
 	xed_decoded_inst_set_mode(&xinstr, machine_mode, addr_mode);
-			
+
 	xed_error = xed_decode(
 	    &xinstr,
 	    XED_STATIC_CAST(const xed_uint8_t*, addr),
 	    bytes);
 
-			
+
 	if (xed_error == XED_ERROR_NONE) {
 	    char buffer[10000] = {};
 
 	    xed_print_info_t pi = {};
 	    xed_init_print_info(&pi);
-			    
+
 	    pi.p = &xinstr;
 	    pi.blen = sizeof(buffer);
 	    pi.buf = buffer;
 	    pi.runtime_address = (uint64_t)addr;
 	    pi.syntax = XED_SYNTAX_ATT;
-			    
+
 	    int ok = xed_format_generic(&pi);
 	    if (!ok) {
 		std::cerr << "can't disassemble" << std::endl;
@@ -84,7 +84,7 @@ std::string disassemble(const void* addr, unsigned char* ret_len) {
 	    if (ret_len) {
 		*ret_len = bytes;
 	    }
-	    
+
 	    return buffer;
 	}
     }
@@ -95,7 +95,7 @@ std::vector<ret_location> get_all_rets(const void* addr, size_t len) {
     xed_tables_init();
 
     std::vector<ret_location> result;
-    
+
     auto it = (char*)addr, it_end = (char*)addr + len;
     while (it < it_end) {
 	int bytes;
@@ -123,7 +123,7 @@ std::vector<ret_location> get_all_rets(const void* addr, size_t len) {
 		pi.buf = buffer;
 		pi.runtime_address = (uint64_t)it;
 		pi.syntax = XED_SYNTAX_ATT;
-		
+
 		int ok = xed_format_generic(&pi);
 		if (!ok) {
 		    std::cerr << "can't disassemble" << std::endl;
@@ -145,15 +145,15 @@ std::vector<ret_location> get_all_rets(const void* addr, size_t len) {
 		} else {
 		    //std::cout << "iclass = " << iclass << std::endl;
 		}
-		
+
 		break;
 	    }
 	}
 
 
-	
+
 	it += bytes;
     }
-    
+
     return result;
 }
