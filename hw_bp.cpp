@@ -112,7 +112,7 @@ unsigned char install_sigill_trampouline(char* inst_addr, char* implementation_l
 
     std::cout << "Trampouline: "; disassemble(std::cout, implementation_loc, inst_len + 6) << std::endl;
 
-    *inst_addr = 0x06;
+    //*inst_addr = 0x06;
 
     return result;
 }

@@ -9,6 +9,14 @@ extern "C" {
 xed_machine_mode_enum_t machine_mode = XED_MACHINE_MODE_LONG_64;
 xed_address_width_enum_t addr_mode = XED_ADDRESS_WIDTH_64b;
 
+bool xed_initialized = false;
+void ensure_xed_initialized() {
+    if (!xed_initialized) {
+	xed_tables_init();
+	xed_initialized = true;
+    }
+}
+
 
 std::ostream& disassemble(std::ostream& stm, const void* addr, size_t len) {
     auto it = (const char*)addr, it_end = (const char*)addr + len;
@@ -22,6 +30,8 @@ std::ostream& disassemble(std::ostream& stm, const void* addr, size_t len) {
 }
 
 std::string disassemble(const void* addr, unsigned char len) {
+    ensure_xed_initialized();
+    
     xed_error_enum_t xed_error;
     xed_decoded_inst_t xinstr;
     xed_decoded_inst_zero(&xinstr);
@@ -52,6 +62,8 @@ std::string disassemble(const void* addr, unsigned char len) {
 }
 
 std::string disassemble(const void* addr, unsigned char* ret_len) {
+    ensure_xed_initialized();
+    
     for (unsigned char bytes = 1; bytes <= 15; ++bytes) {
 	xed_error_enum_t xed_error;
 	xed_decoded_inst_t xinstr;
@@ -92,8 +104,8 @@ std::string disassemble(const void* addr, unsigned char* ret_len) {
 }
 
 std::vector<ret_location> get_all_rets(const void* addr, size_t len) {
-    xed_tables_init();
-
+    ensure_xed_initialized();
+    
     std::vector<ret_location> result;
 
     auto it = (char*)addr, it_end = (char*)addr + len;
@@ -102,6 +114,7 @@ std::vector<ret_location> get_all_rets(const void* addr, size_t len) {
 	for (bytes = 1; bytes <= 15; ++bytes) {
 	    xed_error_enum_t xed_error;
 	    xed_decoded_inst_t xinstr;
+
 	    xed_decoded_inst_zero(&xinstr);
 	    xed_decoded_inst_set_mode(&xinstr, machine_mode, addr_mode);
 

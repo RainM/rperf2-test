@@ -22,11 +22,9 @@ extern "C" {
 #include "hw_bp.hpp"
 #include "xed_driver.hpp"
 
-struct method_to_profile {
+struct method_to_profile_t {
     void* addr;
-    jmethodID method_id;
     char* trampoulines;
-    std::unordered_set<const char*> sigill_addresses;
 };
 
 std::unordered_map<const void*, void*> handler_by_addr;
@@ -37,25 +35,29 @@ std::atomic<bool> atomic_guard;
 
 void handler(int signal, siginfo_t* si, void* arg) {
 
+    ::exit(11);
+    
     const void* sigill_addr = (unsigned char*)si->si_addr;
-    const void* sigill_handler = handler_by_addr[sigill_addr];
 
+    void* sigill_handler = nullptr;
     {
 	spin_cs cs(atomic_guard);
 
+	sigill_handler = (void*)handler_by_addr[sigill_addr];
+
 	auto it_route_begin = routine_begin.find(sigill_addr);
 	if (it_route_begin != routine_begin.end()) {
-	    printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+	    //printf("BEGIN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	} else {
 	    auto it_route_end = routine_end.find(sigill_addr);
 	    if (it_route_end != routine_end.end()) {
-		printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
+		//printf("END/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	    } else {
 		printf("UNKNOWN/SIGILL: %x -> %x\n", sigill_addr, sigill_handler);
 	    }
 	}
     }
-
+    
     if (sigill_handler == nullptr) {
 	printf("???\n");
 	::exit(1);
@@ -95,6 +97,8 @@ jvmti_ptr<T>&& ensure_deallocate(jvmtiEnv* e) {
 std::string class_to_profile;
 std::string method_to_profile;
 
+std::unordered_map<jmethodID, method_to_profile_t> methods_to_profile_by_jmethodid;
+
 static void JNICALL
 cbMethodCompiled(
     jvmtiEnv *jvmti,
@@ -107,7 +111,7 @@ cbMethodCompiled(
 {
 
     bool process_method = false;
-
+    
     jvmti_ptr<char*> method_name(jvmti);
     char* sig = nullptr;
     if (!jvmti->GetMethodName(method, &method_name.get(), &sig, NULL)) {
@@ -122,7 +126,7 @@ cbMethodCompiled(
 		full_method_name += sig;
 
 		std::cout << "Method: " << full_method_name << std::endl;
-
+		
 		if (strcmp(clsig.get(), class_to_profile.c_str()) == 0) {
 		    if (strcmp(method_name.get(), method_to_profile.c_str()) == 0) {
 			std::cout << "decision!!!" << std::endl;
@@ -166,7 +170,6 @@ cbMethodCompiled(
 				    goto decision_made;
 				}
 			    }
-
 			}
 		    }
 		}
@@ -175,23 +178,53 @@ cbMethodCompiled(
 
     decision_made:
 	if (process_method) {
+	    
+	    ::disassemble(std::cout, code_addr, code_size+1);
+	    
+	    method_to_profile_t method;
+	    method.addr = (void*)code_addr;
+	    method.trampoulines = (char*)::mmap(
+		nullptr,
+		4096,
+		PROT_WRITE | PROT_EXEC,
+		MAP_PRIVATE | MAP_ANONYMOUS,
+		0,
+		0);
 
+	    auto it = method.trampoulines;
+
+	    spin_cs cs(atomic_guard);
+
+	    /*
+	    auto tr_sz = install_sigill_trampouline((char*)code_addr, it);
+	    routine_begin.insert((char*)code_addr);
+	    handler_by_addr[code_addr] = it;
+	    it += tr_sz;
+	    */
+
+	    /*
+	    auto rets = get_all_rets((char*)code_addr, code_size + 1);
+
+	    for (const auto& ret : rets) {
+		auto tr_sz = install_sigill_trampouline(ret.addr, it);
+		routine_end.insert(ret.addr);
+		handler_by_addr[ret.addr] = it;
+		it += tr_sz;
+		}*/
 	}
     }
 
     std::cout << "--------------------------------------------" << std::endl;
 }
 
-#if 0
 void JNICALL
 cbMethodDynamic(jvmtiEnv *jvmti,
             const char* name,
             const void* address,
             jint length)
 {
-    //std::cout << "dynamic method" << name << "@" << address << ":" << length << std::endl;
+    std::cout << "dynamic method" << name << "@" << address << ":" << length << std::endl;
 }
-#endif
 
 void JNICALL cbMethodUnload
     (jvmtiEnv *jvmti_env,
@@ -211,7 +244,6 @@ Agent_OnLoad(JavaVM *vm, char *options, void *reserved) {
     sa.sa_sigaction = &handler;
     sa.sa_flags = SA_SIGINFO;
     sigaction(SIGILL, &sa, NULL);
-
 
     jvmtiEnv* jvmti = nullptr;
     {
@@ -237,9 +269,7 @@ Agent_OnLoad(JavaVM *vm, char *options, void *reserved) {
 	jvmtiEventCallbacks callbacks = {};
 
 	callbacks.CompiledMethodLoad = &cbMethodCompiled;
-	#if 0
 	callbacks.DynamicCodeGenerated = &cbMethodDynamic;
-	#endif
 	callbacks.CompiledMethodUnload = &cbMethodUnload;
 
 	auto status = jvmti->SetEventCallbacks(&callbacks, sizeof(callbacks));
@@ -248,12 +278,13 @@ Agent_OnLoad(JavaVM *vm, char *options, void *reserved) {
     {
  	jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_COMPILED_METHOD_LOAD, (jthread)NULL);
 	jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_COMPILED_METHOD_UNLOAD, (jthread)NULL);
+	jvmti->SetEventNotificationMode(JVMTI_ENABLE, JVMTI_EVENT_DYNAMIC_CODE_GENERATED, (jthread)NULL);
     }
 
     {
 	auto status = jvmti->GenerateEvents(JVMTI_EVENT_COMPILED_METHOD_LOAD);
-
 	status = jvmti->GenerateEvents(JVMTI_EVENT_COMPILED_METHOD_UNLOAD);
+	status = jvmti->GenerateEvents(JVMTI_EVENT_DYNAMIC_CODE_GENERATED);
     }
 
     if (options == nullptr) {
