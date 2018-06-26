@@ -19,7 +19,7 @@ java-app-agent:
 		-DTRIGGER_COUNTDOWN=10000 \
 		-DDUMP_OUT_CLASSES=true \
 		-DOUTPUT_INSTRUMENTED_CLASSES=1 \
-		-DPERCENTILE=0.99999 \
+		-DPERCENTILE=0.999999 \
 		-agentlib:rperf2 \
 		-javaagent:javaagent/target/instrumenter-1.2-SNAPSHOT-jar-with-dependencies.jar \
 		-XX:+UnlockDiagnosticVMOptions \

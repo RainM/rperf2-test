@@ -1,10 +1,15 @@
+import java.util.ArrayList;
+
 class JTest {
 
     private static String s;
+    private static ArrayList<String> lst = new ArrayList();
+
     
     public static int __do(int a, int b, int c) {
 	s = "" + a;
-	return (a + b) % c;
+	lst.add(" -> " + s);
+	return (a + b) % (c + lst.size());
     }
     
     private static int foo(int arg1, int arg2) {
